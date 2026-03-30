@@ -10,7 +10,6 @@ permissions:
   contents: write
 
 env:
-  # Fix upcoming Node 24 enforcement warning
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
@@ -30,18 +29,16 @@ jobs:
       uses: ilammy/msvc-dev-cmd@v1
 
     # --------------------------------------------------
-    # REMOVE WDK INSTALL (this was the failure)
-    # --------------------------------------------------
-
-    # --------------------------------------------------
-    # Setup vcpkg (REQUIRED)
+    # Setup vcpkg (required by project)
     # --------------------------------------------------
     - name: Setup vcpkg
+      shell: pwsh
       run: |
         git clone https://github.com/microsoft/vcpkg C:\vcpkg
         C:\vcpkg\bootstrap-vcpkg.bat
 
     - name: Install dependencies
+      shell: pwsh
       run: |
         C:\vcpkg\vcpkg install capstone[x86]:x86-windows-static
         C:\vcpkg\vcpkg install capstone[x86]:x64-windows-static
@@ -50,55 +47,47 @@ jobs:
         C:\vcpkg\vcpkg install tinyxml2:x86-windows-static
         C:\vcpkg\vcpkg install tinyxml2:x64-windows-static
 
-    - name: Integrate vcpkg
+    - name: Integrate vcpkg with MSBuild
+      shell: pwsh
       run: C:\vcpkg\vcpkg integrate install
 
     # --------------------------------------------------
-    # Build Zydis FIRST
+    # Build Zydis (required before main solution)
     # --------------------------------------------------
     - name: Build Zydis
+      shell: pwsh
       run: |
-        msbuild dependencies\zydis\msvc\Zydis.sln ^
-          /p:Configuration=Release ^
-          /p:Platform=x64 ^
-          /p:WindowsTargetPlatformVersion=10.0.26100.0 ^
-          /m
-
-        msbuild dependencies\zydis\msvc\Zycore.sln ^
-          /p:Configuration=Release ^
-          /p:Platform=x64 ^
-          /p:WindowsTargetPlatformVersion=10.0.26100.0 ^
-          /m
+        msbuild "dependencies\zydis\msvc\Zydis.sln" /p:Configuration=Release /p:Platform=x64 /p:WindowsTargetPlatformVersion=10.0.26100.0 /m
 
     # --------------------------------------------------
-    # Build entire solution (includes driver)
+    # Build full solution (includes driver + WinArk)
     # --------------------------------------------------
     - name: Build WinArk Solution
+      shell: pwsh
       run: |
-        msbuild Anti-Rootkit.sln ^
-          /p:Configuration=Release ^
-          /p:Platform=x64 ^
-          /p:WindowsTargetPlatformVersion=10.0.26100.0 ^
-          /m
+        msbuild "Anti-Rootkit.sln" /p:Configuration=Release /p:Platform=x64 /p:WindowsTargetPlatformVersion=10.0.26100.0 /m
 
     # --------------------------------------------------
-    # Collect artifacts
+    # Collect build outputs
     # --------------------------------------------------
     - name: Collect artifacts
+      shell: pwsh
       run: |
-        mkdir release
-        for /r %%i in (*.exe *.dll *.sys) do copy "%%i" release\
+        New-Item -ItemType Directory -Path release -Force
+        Get-ChildItem -Recurse -Include *.exe,*.dll,*.sys | Copy-Item -Destination release -Force
 
     # --------------------------------------------------
-    # Archive
+    # Archive release
     # --------------------------------------------------
-    - name: Archive
-      run: powershell Compress-Archive -Path release\* -DestinationPath WinArk-${{ github.ref_name }}.zip
+    - name: Archive release
+      shell: pwsh
+      run: |
+        Compress-Archive -Path release\* -DestinationPath WinArk-${{ github.ref_name }}.zip
 
     # --------------------------------------------------
-    # Release
+    # Publish GitHub Release
     # --------------------------------------------------
-    - name: Create Release
+    - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
         files: WinArk-${{ github.ref_name }}.zip
