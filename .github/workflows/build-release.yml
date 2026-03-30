@@ -48,17 +48,16 @@ jobs:
       shell: pwsh
       run: C:\vcpkg\vcpkg integrate install
 
-    - name: Locate Zydis solution
-      shell: pwsh
-      run: |
-        Get-ChildItem -Recurse -Filter Zydis.sln | Select-Object -First 5
-
-    - name: Build Zydis
+    - name: Build Zydis (kernel configs)
       shell: pwsh
       run: |
         $zydis = Get-ChildItem -Recurse -Filter Zydis.sln | Select-Object -First 1
         if (-not $zydis) { throw "Zydis.sln not found" }
-        msbuild "$($zydis.FullName)" /p:Configuration=Release /p:Platform=x64 /p:WindowsTargetPlatformVersion=10.0.26100.0 /m
+
+        msbuild "$($zydis.FullName)" /t:Zydis /p:Configuration=Release /p:Platform=Win32 /p:WindowsTargetPlatformVersion=10.0.26100.0 /m
+        msbuild "$($zydis.FullName)" /t:Zydis /p:Configuration=Release /p:Platform=x64 /p:WindowsTargetPlatformVersion=10.0.26100.0 /m
+        msbuild "$($zydis.FullName)" /t:Zycore /p:Configuration=Release /p:Platform=Win32 /p:WindowsTargetPlatformVersion=10.0.26100.0 /m
+        msbuild "$($zydis.FullName)" /t:Zycore /p:Configuration=Release /p:Platform=x64 /p:WindowsTargetPlatformVersion=10.0.26100.0 /m
 
     - name: Build WinArk Solution
       shell: pwsh
