@@ -28,9 +28,6 @@ jobs:
     - name: Setup MSVC environment
       uses: ilammy/msvc-dev-cmd@v1
 
-    # --------------------------------------------------
-    # Setup vcpkg (required by project)
-    # --------------------------------------------------
     - name: Setup vcpkg
       shell: pwsh
       run: |
@@ -51,42 +48,34 @@ jobs:
       shell: pwsh
       run: C:\vcpkg\vcpkg integrate install
 
-    # --------------------------------------------------
-    # Build Zydis (required before main solution)
-    # --------------------------------------------------
+    - name: Locate Zydis solution
+      shell: pwsh
+      run: |
+        Get-ChildItem -Recurse -Filter Zydis.sln | Select-Object -First 5
+
     - name: Build Zydis
       shell: pwsh
       run: |
-        msbuild "dependencies\zydis\msvc\Zydis.sln" /p:Configuration=Release /p:Platform=x64 /p:WindowsTargetPlatformVersion=10.0.26100.0 /m
+        $zydis = Get-ChildItem -Recurse -Filter Zydis.sln | Select-Object -First 1
+        if (-not $zydis) { throw "Zydis.sln not found" }
+        msbuild "$($zydis.FullName)" /p:Configuration=Release /p:Platform=x64 /p:WindowsTargetPlatformVersion=10.0.26100.0 /m
 
-    # --------------------------------------------------
-    # Build full solution (includes driver + WinArk)
-    # --------------------------------------------------
     - name: Build WinArk Solution
       shell: pwsh
       run: |
         msbuild "Anti-Rootkit.sln" /p:Configuration=Release /p:Platform=x64 /p:WindowsTargetPlatformVersion=10.0.26100.0 /m
 
-    # --------------------------------------------------
-    # Collect build outputs
-    # --------------------------------------------------
     - name: Collect artifacts
       shell: pwsh
       run: |
         New-Item -ItemType Directory -Path release -Force
         Get-ChildItem -Recurse -Include *.exe,*.dll,*.sys | Copy-Item -Destination release -Force
 
-    # --------------------------------------------------
-    # Archive release
-    # --------------------------------------------------
     - name: Archive release
       shell: pwsh
       run: |
         Compress-Archive -Path release\* -DestinationPath WinArk-${{ github.ref_name }}.zip
 
-    # --------------------------------------------------
-    # Publish GitHub Release
-    # --------------------------------------------------
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
